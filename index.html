@@ -13,6 +13,7 @@ body {
   padding: 10px;
 }
 h1 { text-align: center; font-size: 22px; }
+
 .best-box {
   background: #007aff;
   color: white;
@@ -22,17 +23,33 @@ h1 { text-align: center; font-size: 22px; }
   text-align: center;
   font-size: 18px;
 }
+
+.refresh-btn {
+  display: block;
+  margin: 10px auto;
+  padding: 12px 20px;
+  border-radius: 12px;
+  border: none;
+  background: #007aff;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
+
 .container { display: grid; gap: 15px; }
+
 .card {
   background: white;
   padding: 20px;
   border-radius: 18px;
   box-shadow: 0 4px 15px rgba(0,0,0,0.08);
 }
+
 .card.best {
   border: 3px solid #007aff;
   transform: scale(1.02);
 }
+
 .stop-name { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
 .bus { font-size: 16px; margin: 5px 0; }
 .rank { font-weight: bold; color: #007aff; }
@@ -42,7 +59,11 @@ h1 { text-align: center; font-size: 22px; }
 <body>
 
 <h1>🚍 환승 최적 추천</h1>
-<div id="bestBox" class="best-box">불러오는 중...</div>
+
+<div id="bestBox" class="best-box">버튼 눌러서 조회</div>
+
+<button class="refresh-btn" onclick="render()">🔄 새로고침</button>
+
 <div class="container" id="container"></div>
 
 <script>
@@ -72,15 +93,20 @@ async function getArrival(stopId){
     const res = await fetch(`/api/bus?stationId=${stopId}`);
     const data = await res.json();
 
-    const items = data.response.msgBody.busArrivalList;
+    let items = data.response.msgBody.busArrivalList;
+
+    // 🔥 배열 강제 변환 (핵심)
+    if (!Array.isArray(items)) {
+      items = [items];
+    }
 
     let list = [];
 
     for (let item of items){
       let route = String(item.routeName).trim();
 
-// 🔥 추가
-route = route.replace("번", "").replace(/\s/g, "");
+      // 🔥 노선명 정리
+      route = route.replace("번", "").replace(/\s/g, "");
 
       if (!FINAL_BUSES.includes(route)) continue;
 
@@ -102,7 +128,10 @@ route = route.replace("번", "").replace(/\s/g, "");
 
 async function render(){
   const container = document.getElementById("container");
+  const bestBox = document.getElementById("bestBox");
+
   container.innerHTML = "";
+  bestBox.innerText = "불러오는 중...";
 
   let bestStop = null;
   let minTime = 999999;
@@ -115,10 +144,7 @@ async function render(){
     results.push({stop, arrivals, myETA});
 
     for (let bus of arrivals){
-      let wait = (bus.time * 60) - myETA;
-      if (wait < 0) continue;
-
-      let total = myETA + wait + estimateRideTime(bus.route);
+      let total = Math.max(bus.time * 60, myETA) + estimateRideTime(bus.route);
 
       if (total < minTime){
         minTime = total;
@@ -127,8 +153,8 @@ async function render(){
     }
   }
 
-  document.getElementById("bestBox").innerText =
-    bestStop ? `👉 ${bestStop}에서 내리기!` : "정보 불러오기 실패";
+  bestBox.innerText =
+    bestStop ? `👉 ${bestStop}에서 내리기!` : "정보 없음";
 
   for (let data of results){
     let card = document.createElement("div");
@@ -159,8 +185,8 @@ async function render(){
   }
 }
 
-render();
-setInterval(render, 15000);
+// ❌ 자동 갱신 제거
+// setInterval(render, 15000);
 </script>
 
 </body>
