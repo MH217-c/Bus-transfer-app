@@ -77,7 +77,10 @@ async function getArrival(stopId){
     let list = [];
 
     for (let item of items){
-      let route = String(item.routeName).trim(); // ⭐ 핵심 수정
+      let route = String(item.routeName).trim();
+
+// 🔥 추가
+route = route.replace("번", "").replace(/\s/g, "");
 
       if (!FINAL_BUSES.includes(route)) continue;
 
