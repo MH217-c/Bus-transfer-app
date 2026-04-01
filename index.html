@@ -100,7 +100,7 @@ function estimateRideTime(route){
 
 async function getArrival(stopId){
   try {
-    const url = `https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListv2?serviceKey=${API_KEY}&stationId=${stopId}`;
+    const url = `/api/bus?stationId=${stopId}/6410000/busarrivalservice/v2/getBusArrivalListv2?serviceKey=${API_KEY}&stationId=${stopId}`;
 
     const res = await fetch(PROXY + encodeURIComponent(url));
     const text = await res.text();
