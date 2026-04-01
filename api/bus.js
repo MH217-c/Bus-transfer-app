@@ -7,18 +7,18 @@ async function getArrival(stopId){
 
     let list = [];
 
-    for (let item of items){
-      let route = String(item.routeName);
+for (let item of items){
+  let route = String(item.routeName).trim();
 
-      if (!FINAL_BUSES.includes(route)) continue;
+  if (!FINAL_BUSES.includes(route)) continue;
 
-      if (item.predictTime1){
-        list.push({
-          route: route,
-          time: parseInt(item.predictTime1)
-        });
-      }
-    }
+  if (item.predictTime1){
+    list.push({
+      route: route,
+      time: parseInt(item.predictTime1)
+    });
+  }
+}
 
     list.sort((a,b)=>a.time-b.time);
     return list.slice(0,3);
