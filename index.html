@@ -7,93 +7,147 @@
 <style>
 body { font-family: -apple-system, BlinkMacSystemFont; background: #f5f7fb; margin: 0; padding: 10px; }
 h1 { text-align: center; font-size: 22px; }
-.best-box { background: #007aff; color: white; margin: 15px; padding: 20px; border-radius: 18px; text-align: center; font-size: 18px; min-height: 60px; display: flex; align-items: center; justify-content: center; line-height: 1.5; }
-.refresh-btn { display: block; margin: 10px auto; padding: 12px 20px; border-radius: 12px; border: none; background: #007aff; color: white; font-size: 16px; cursor: pointer; min-width: 160px; }
+.best-box {
+  background: #007aff; color: white;
+  margin: 12px 0; padding: 18px 20px;
+  border-radius: 18px; text-align: center;
+  font-size: 18px; line-height: 1.6; min-height: 60px;
+  display: flex; align-items: center; justify-content: center;
+}
+.refresh-btn {
+  display: block; margin: 0 auto 14px;
+  padding: 12px 24px; border-radius: 12px;
+  border: none; background: #007aff; color: white;
+  font-size: 16px; cursor: pointer; min-width: 160px;
+}
 .refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.container { display: grid; gap: 15px; }
-.card { background: white; padding: 20px; border-radius: 18px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
-.card.best { border: 3px solid #007aff; transform: scale(1.02); }
+.container { display: grid; gap: 14px; }
+.card {
+  background: white; padding: 18px 20px;
+  border-radius: 18px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+  border: 3px solid transparent;
+}
+.card.best { border-color: #007aff; }
 .stop-name { font-size: 17px; font-weight: bold; margin-bottom: 2px; }
-.stop-code { font-size: 12px; color: #999; margin-bottom: 10px; }
-.bus { font-size: 15px; margin: 6px 0; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-.rank { font-weight: bold; color: #007aff; min-width: 28px; }
-.bus-num { font-weight: bold; font-size: 16px; min-width: 52px; }
-.bus-time { color: #333; }
-.bus-next { font-size: 12px; color: #aaa; }
-.no-bus { color: #bbb; font-size: 14px; }
-.debug-toggle { display: block; margin: 20px auto 0; padding: 8px 16px; border-radius: 8px; border: 1px solid #ddd; background: white; font-size: 12px; cursor: pointer; color: #888; }
-.debug-box { display: none; margin-top: 10px; background: #1e1e2e; border-radius: 12px; padding: 14px; color: #cdd6f4; font-family: monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto; }
+.stop-code { font-size: 12px; color: #999; margin-bottom: 12px; }
+.bus-row {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 7px 0; border-top: 1px solid #f0f0f0;
+}
+.bus-name { font-size: 17px; font-weight: bold; min-width: 58px; }
+.bus-right { text-align: right; }
+.bus-min { font-size: 26px; font-weight: bold; color: #007aff; line-height: 1; }
+.bus-min.urgent { color: #ff3b30; }
+.bus-min.soon   { color: #ff9500; }
+.bus-next { font-size: 12px; color: #aaa; margin-top: 2px; }
+.no-bus { font-size: 14px; color: #bbb; padding: 6px 0; }
+.debug-toggle {
+  display: block; margin: 20px auto 6px;
+  padding: 7px 14px; border-radius: 8px;
+  border: 1px solid #ddd; background: white;
+  font-size: 12px; cursor: pointer; color: #888;
+}
+.debug-box {
+  display: none; margin-top: 6px;
+  background: #1e1e2e; border-radius: 12px;
+  padding: 14px; color: #cdd6f4;
+  font-family: monospace; font-size: 11px;
+  white-space: pre-wrap; word-break: break-all;
+  max-height: 400px; overflow-y: auto;
+}
 </style>
 </head>
 <body>
+
 <h1>🚍 환승 최적 추천</h1>
 <div id="bestBox" class="best-box">버튼 눌러서 조회</div>
 <button class="refresh-btn" id="refreshBtn" onclick="render()">🔄 새로고침</button>
 <div class="container" id="container"></div>
 <button class="debug-toggle" onclick="toggleDebug()">🔍 원본 데이터 보기</button>
 <div class="debug-box" id="debugBox"></div>
+
 <script>
 const STOPS = [
-  { name: "수원순복음교회·하늘채더퍼스트", displayCode: "02269", index: 0 },
-  { name: "수원남부버스공영차고지",          displayCode: "02363", index: 1 },
-  { name: "영통아이파크캐슬2단지",           displayCode: "04078", index: 2 },
-  { name: "영통롯데캐슬엘클래스1단지",       displayCode: "04440", index: 3 },
+  { name: "수원순복음교회·하늘채더퍼스트", code: "02269", stationId: "202000212", index: 0 },
+  { name: "수원남부버스공영차고지",          code: "02363", stationId: "202000216", index: 1 },
+  { name: "영통아이파크캐슬2단지",           code: "04078", stationId: "202000224", index: 2 },
+  { name: "영통롯데캐슬엘클래스1단지",       code: "04440", stationId: "202000223", index: 3 },
 ];
 
-const FINAL_BUSES = ["13-1", "13", "64", "8", "701A", "H101", "13A", "76"];
+const TARGET_ROUTES = ["13-1", "13", "13A", "64", "8", "701A", "H101", "76"];
 
-function normalize(raw) {
-  if (raw == null) return "";
-  return String(raw).trim().replace(/\s+/g,"").replace(/번$/,"").replace(/^0+(?=\d)/,"").toUpperCase();
+function norm(raw) {
+  if (!raw) return "";
+  return String(raw).trim()
+    .replace(/\s+/g, "")
+    .replace(/번$/, "")
+    .replace(/^0+(?=\d)/, "")
+    .toUpperCase();
 }
 
-// API 원본 → 표준 노선명
-// 디버그에서 누락 노선 발견 시 여기에 추가하세요
 const ALIAS = {
-  "131":"13-1", "13.1":"13-1", "13_1":"13-1", "13-1":"13-1",
-  "13A":"13A", "701A":"701A", "H101":"H101",
+  "131": "13-1", "13.1": "13-1", "13_1": "13-1",
+  "13-1": "13-1", "13A": "13A", "13 A": "13A",
+  "701A": "701A", "H101": "H101",
 };
 
-const TARGET_SET = new Set(FINAL_BUSES.map(normalize));
-
-function resolveRoute(raw) {
-  const n = normalize(raw);
-  return ALIAS[n] ?? ALIAS[String(raw).trim().toUpperCase()] ?? n;
+function resolve(raw) {
+  const n = norm(raw);
+  return ALIAS[n] ?? n;
 }
 
-function extraRideMin(index) { return index * 2; }
+const TARGET_SET = new Set(TARGET_ROUTES.map(norm));
 
-function rideToSchool(route) {
-  const map = {"13-1":10,"13":12,"64":13,"8":13,"701A":15,"H101":14,"13A":12,"76":16};
-  return map[normalize(route)] ?? 13;
+function rideMin(route) {
+  const map = { "13-1":10, "13":12, "13A":12, "64":13, "8":13, "701A":15, "H101":14, "76":16 };
+  return map[route] ?? 13;
+}
+
+function minCls(m) {
+  if (m <= 2) return "urgent";
+  if (m <= 6) return "soon";
+  return "";
 }
 
 let debugLog = "";
 
-async function getArrival(displayCode) {
-  const res = await fetch(`/api/bus?displayCode=${displayCode}`);
+async function getArrival(stop) {
+  const res = await fetch(`/api/bus?stationId=${stop.stationId}`);
   const data = await res.json();
-  const sid = data._resolvedStationId ?? "??";
-  debugLog += `\n=== 정류소 ${displayCode} (stationId: ${sid}) ===\n`;
+
+  debugLog += "\n=== " + stop.name + " [" + stop.stationId + "] ===\n";
+
+  if (data._error) {
+    debugLog += "  오류: " + data._error + "\n";
+    return [];
+  }
 
   let items = data?.response?.msgBody?.busArrivalList;
-  if (!items) { debugLog += "  (도착 정보 없음)\n"; return []; }
+  if (!items) {
+    debugLog += "  응답: " + JSON.stringify(data).slice(0, 300) + "\n";
+    return [];
+  }
   if (!Array.isArray(items)) items = [items];
 
-  let list = [];
+  const list = [];
   for (const item of items) {
-    const rawName  = item.routeNm ?? item.routeName ?? "";
-    const resolved = resolveRoute(rawName);
-    const matched  = TARGET_SET.has(resolved);
-    debugLog += `  ${matched?"✅":"  "} 원본="${rawName}" → "${resolved}"\n`;
-    if (!matched) continue;
+    const rawName = item.routeNm ?? item.routeName ?? "";
+    const resolved = resolve(rawName);
+    const hit = TARGET_SET.has(resolved);
+    debugLog += "  " + (hit ? "V " : "  ") + '"' + rawName + '" -> "' + resolved + '"\n';
+    if (!hit) continue;
     const t1 = parseInt(item.predictTime1);
     const t2 = parseInt(item.predictTime2);
     if (isNaN(t1)) continue;
-    list.push({ route:resolved, rawName:rawName, time:t1, time2:isNaN(t2)?null:t2, flag:item.flag??"" });
+    list.push({
+      route: resolved, rawName,
+      time: t1, time2: isNaN(t2) ? null : t2,
+      flag: item.flag ?? "",
+    });
   }
-  list.sort((a,b)=>a.time-b.time);
-  return list.slice(0,3);
+  list.sort((a, b) => a.time - b.time);
+  return list.slice(0, 3);
 }
 
 async function render() {
@@ -102,57 +156,66 @@ async function render() {
   const btn       = document.getElementById("refreshBtn");
   container.innerHTML = "";
   bestBox.textContent = "불러오는 중...";
-  btn.disabled = true; btn.textContent = "⏳ 조회 중...";
+  btn.disabled = true; btn.textContent = "조회 중...";
   debugLog = "";
 
-  const allArrivals = await Promise.all(STOPS.map(s=>getArrival(s.displayCode).catch(()=>[])));
+  const allArrivals = await Promise.all(
+    STOPS.map(s => getArrival(s).catch(e => {
+      debugLog += "\n[오류] " + s.name + ": " + e.message + "\n";
+      return [];
+    }))
+  );
 
-  let bestStop=null, minTotal=Infinity;
-  const results = STOPS.map((stop,i)=>{
-    const arrivals=allArrivals[i];
-    for(const bus of arrivals){
-      const total=bus.time+extraRideMin(stop.index)+rideToSchool(bus.route);
-      if(total<minTotal){minTotal=total;bestStop=stop.name;}
+  let bestStop = null, minTotal = Infinity;
+  const results = STOPS.map((stop, i) => {
+    const arrivals = allArrivals[i];
+    for (const bus of arrivals) {
+      if (bus.flag === "STOP") continue;
+      const total = (stop.index * 2) + bus.time + rideMin(bus.route);
+      if (total < minTotal) { minTotal = total; bestStop = stop.name; }
     }
-    return {stop,arrivals};
+    return { stop, arrivals };
   });
 
-  if(bestStop){
-    bestBox.innerHTML=`👉 <strong>${bestStop}</strong>에서 내리기!<br><span style="font-size:14px;opacity:.85">망포고까지 약 ${minTotal}분 예상</span>`;
-  } else {
-    bestBox.textContent="해당 노선 정보 없음";
-  }
+  bestBox.innerHTML = bestStop
+    ? "👉 <strong>" + bestStop + "</strong>에서 내리기!<br><span style='font-size:14px;opacity:.85'>망포고까지 약 " + minTotal + "분 예상</span>"
+    : "해당 노선 정보 없음";
 
-  for(const {stop,arrivals} of results){
-    const card=document.createElement("div");
-    card.className="card"+(stop.name===bestStop?" best":"");
-    let html=`<div class="stop-name">${stop.name}</div><div class="stop-code">${stop.displayCode}</div>`;
-    if(arrivals.length===0){
-      html+=`<div class="no-bus">해당 노선 없음</div>`;
+  for (const { stop, arrivals } of results) {
+    const card = document.createElement("div");
+    card.className = "card" + (stop.name === bestStop ? " best" : "");
+
+    let html = "<div class='stop-name'>" + stop.name + "</div>"
+             + "<div class='stop-code'>정류소 " + stop.code + " · ID " + stop.stationId + "</div>";
+
+    if (arrivals.length === 0) {
+      html += "<div class='no-bus'>해당 노선 없음 (운행 전·후 또는 매칭 실패)</div>";
     } else {
-      arrivals.forEach((bus,idx)=>{
-        const next=bus.time2!=null?`<span class="bus-next">(다음 ${bus.time2}분)</span>`:"";
-        const flag=bus.flag==="STOP"?" ⛔":bus.flag==="WAIT"?" ⏳":"";
-        const hint=normalize(bus.rawName)!==bus.route?`<span style="color:#bbb;font-size:11px"> [API:${bus.rawName}]</span>`:"";
-        html+=`<div class="bus">
-          <span class="rank">${idx+1}위</span>
-          <span class="bus-num">${bus.route}번${hint}</span>
-          <span class="bus-time">${bus.time}분 후</span>
-          ${next}${flag}
-        </div>`;
-      });
+      for (const bus of arrivals) {
+        const cls  = minCls(bus.time);
+        const next = bus.time2 != null ? "<div class='bus-next'>다음 " + bus.time2 + "분 후</div>" : "";
+        const flag = bus.flag === "STOP" ? " ⛔" : bus.flag === "WAIT" ? " ⏳" : "";
+        const hint = norm(bus.rawName) !== bus.route
+          ? "<span style='font-size:11px;color:#bbb'> [API:" + bus.rawName + "]</span>" : "";
+        html += "<div class='bus-row'>"
+          + "<div class='bus-name'>" + bus.route + "번" + hint + flag + "</div>"
+          + "<div class='bus-right'>"
+          + "<div class='bus-min " + cls + "'>" + bus.time + "<span style='font-size:14px;font-weight:400'>분</span></div>"
+          + next
+          + "</div></div>";
+      }
     }
-    card.innerHTML=html;
+    card.innerHTML = html;
     container.appendChild(card);
   }
 
-  document.getElementById("debugBox").textContent=debugLog;
-  btn.disabled=false; btn.textContent="🔄 새로고침";
+  document.getElementById("debugBox").textContent = debugLog;
+  btn.disabled = false; btn.textContent = "🔄 새로고침";
 }
 
-function toggleDebug(){
-  const b=document.getElementById("debugBox");
-  b.style.display=b.style.display==="block"?"none":"block";
+function toggleDebug() {
+  const b = document.getElementById("debugBox");
+  b.style.display = b.style.display === "block" ? "none" : "block";
 }
 </script>
 </body>
