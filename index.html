@@ -53,6 +53,30 @@ h1 { text-align: center; font-size: 22px; }
 .stop-name { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
 .bus { font-size: 16px; margin: 5px 0; }
 .rank { font-weight: bold; color: #007aff; }
+
+/* 디버그 토글 */
+.debug-section {
+  margin-top: 30px;
+  background: #1e1e2e;
+  border-radius: 12px;
+  padding: 14px;
+  color: #cdd6f4;
+  font-family: monospace;
+  font-size: 12px;
+}
+.debug-toggle {
+  display: block;
+  margin: 20px auto 0;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background: white;
+  font-size: 13px;
+  cursor: pointer;
+  color: #555;
+}
+.debug-content { display: none; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; margin-top: 10px; }
+.debug-content.open { display: block; }
 </style>
 </head>
 
@@ -66,128 +90,168 @@ h1 { text-align: center; font-size: 22px; }
 
 <div class="container" id="container"></div>
 
+<button class="debug-toggle" onclick="toggleDebug()">🔍 원본 API 데이터 보기</button>
+<div class="debug-section" id="debug-section" style="display:none">
+  <div id="debug-content" class="debug-content open"></div>
+</div>
+
 <script>
 const STOPS = [
   {name:"수원순복음교회·하늘채더퍼스트", id:"202000212", index:0},
-  {name:"수원남부버스공영차고지", id:"202000216", index:1},
-  {name:"영통아이파크캐슬2단지", id:"202000224", index:2},
-  {name:"영통롯데캐슬엘클래스1단지", id:"202000223", index:3},
+  {name:"수원남부버스공영차고지",          id:"202000216", index:1},
+  {name:"영통아이파크캐슬2단지",           id:"202000224", index:2},
+  {name:"영통롯데캐슬엘클래스1단지",       id:"202000223", index:3},
 ];
 
-const FINAL_BUSES = ["13-1","13","64","8","701A","H101","13A","76"];
+// ✅ 핵심: 정확히 매칭할 노선 목록 (정규화된 형태로 보관)
+const FINAL_BUSES = ["13-1", "13", "64", "8", "701A", "H101", "13A", "76"];
 
-function getMyETA(index){
-  return index * 120;
+// ✅ 노선명 정규화 함수 — API가 어떤 형식으로 줘도 통일
+function normalizeName(raw) {
+  if (raw == null) return "";
+  return String(raw)
+    .trim()
+    .replace(/\s+/g, "")     // 공백 제거
+    .replace(/^0+/, "")       // 앞자리 0 제거 (013 → 13)
+    .replace(/번$/, "")       // 끝 "번" 제거
+    .toUpperCase();            // 대문자 통일 (h101 → H101)
 }
 
-function estimateRideTime(route){
+// ✅ 정확히 일치하는지 확인 (includes 대신 Set으로 exact match)
+const FINAL_BUS_SET = new Set(FINAL_BUSES.map(normalizeName));
+
+function isFinalBus(rawName) {
+  return FINAL_BUS_SET.has(normalizeName(rawName));
+}
+
+function getMyETA(index) {
+  return index * 120; // 정류장 간 2분 간격 추정
+}
+
+function estimateRideTime(route) {
   const map = {
-    "13-1":600,"13":700,"64":800,"8":750,
-    "701A":900,"H101":850,"13A":700,"76":950
+    "13-1": 600, "13": 700, "64": 800, "8": 750,
+    "701A": 900, "H101": 850, "13A": 700, "76": 950
   };
-  return map[route] || 800;
+  return map[normalizeName(route)] || 800;
 }
 
-async function getArrival(stopId){
+let debugLog = "";
+
+async function getArrival(stopId) {
   try {
     const res = await fetch(`/api/bus?stationId=${stopId}`);
     const data = await res.json();
 
-    let items = data.response.msgBody.busArrivalList;
+    // 원본 데이터 디버그 로그에 저장
+    debugLog += `\n\n=== 정류소 ${stopId} ===\n`;
+    debugLog += JSON.stringify(data?.response?.msgBody?.busArrivalList, null, 2);
 
-    // 🔥 배열 강제 변환 (핵심)
-    if (!Array.isArray(items)) {
-      items = [items];
-    }
+    let items = data?.response?.msgBody?.busArrivalList;
+    if (!items) return [];
+
+    // 단일 객체면 배열로 변환
+    if (!Array.isArray(items)) items = [items];
 
     let list = [];
 
-    for (let item of items){
-      let route = item.routeNm || item.routeName;
-      route = String(route).trim();
+    for (let item of items) {
+      // ✅ API가 routeNm 또는 routeName 중 하나를 줄 수 있음
+      const rawName = item.routeNm ?? item.routeName ?? "";
+      const normalized = normalizeName(rawName);
 
-      // 🔥 노선명 정리
-      route = route.replace("번", "").replace(/\s/g, "");
+      // ✅ 정확히 일치하는 노선만 포함
+      if (!FINAL_BUS_SET.has(normalized)) continue;
 
-      if (!FINAL_BUSES.includes(route)) continue;
+      const time1 = parseInt(item.predictTime1);
+      const time2 = parseInt(item.predictTime2);
 
-      if (item.predictTime1){
+      if (!isNaN(time1)) {
         list.push({
-          route: route,
-          time: parseInt(item.predictTime1)
+          route: normalized,       // 정규화된 이름 사용
+          displayName: rawName,    // 원본도 보존
+          time: time1,
+          time2: isNaN(time2) ? null : time2,
+          locationNo: item.locationNo1,
+          flag: item.flag,
         });
       }
     }
 
-    list.sort((a,b)=>a.time-b.time);
-    return list.slice(0,3);
+    list.sort((a, b) => a.time - b.time);
+    return list.slice(0, 3);
 
-  } catch(e){
+  } catch (e) {
+    debugLog += `\n\n=== 정류소 ${stopId} 오류 ===\n${e.message}`;
     return [];
   }
 }
 
-async function render(){
+async function render() {
   const container = document.getElementById("container");
   const bestBox = document.getElementById("bestBox");
 
   container.innerHTML = "";
   bestBox.innerText = "불러오는 중...";
+  debugLog = "";
 
   let bestStop = null;
   let minTime = 999999;
   let results = [];
 
-  for (let stop of STOPS){
+  for (let stop of STOPS) {
     let arrivals = await getArrival(stop.id);
     let myETA = getMyETA(stop.index);
 
-    results.push({stop, arrivals, myETA});
+    results.push({ stop, arrivals, myETA });
 
-    for (let bus of arrivals){
-      let total = Math.max(bus.time * 60, myETA) + estimateRideTime(bus.route);
+    for (let bus of arrivals) {
+      let waitSec = Math.max(bus.time * 60, myETA);
+      let total = waitSec + estimateRideTime(bus.route);
 
-      if (total < minTime){
+      if (total < minTime) {
         minTime = total;
         bestStop = stop.name;
       }
     }
   }
 
-  bestBox.innerText =
-    bestStop ? `👉 ${bestStop}에서 내리기!` : "정보 없음";
+  bestBox.innerText = bestStop ? `👉 ${bestStop}에서 내리기!` : "정보 없음";
 
-  for (let data of results){
+  for (let data of results) {
     let card = document.createElement("div");
     card.className = "card";
-
-    if (data.stop.name === bestStop){
-      card.classList.add("best");
-    }
+    if (data.stop.name === bestStop) card.classList.add("best");
 
     let html = `<div class="stop-name">${data.stop.name}</div>`;
 
-    if (data.arrivals.length === 0){
-      html += `<div class="bus">정보 없음</div>`;
+    if (data.arrivals.length === 0) {
+      html += `<div class="bus" style="color:#999">해당 버스 없음</div>`;
     } else {
-      data.arrivals.forEach((bus, idx)=>{
+      data.arrivals.forEach((bus, idx) => {
+        const nextInfo = bus.time2 != null ? ` <span style="color:#aaa;font-size:13px">(다음 ${bus.time2}분)</span>` : "";
+        const flagInfo = bus.flag === "STOP" ? " ⛔ 운행종료" : bus.flag === "WAIT" ? " ⏳ 대기중" : "";
         html += `
           <div class="bus">
-            <span class="rank">${idx+1}번째</span> - 
-            ${bus.route}번 - 
-            ${bus.time}분 후
-          </div>
-        `;
+            <span class="rank">${idx + 1}위</span> —
+            <strong>${bus.route}번</strong>
+            ${bus.time}분 후${nextInfo}${flagInfo}
+          </div>`;
       });
     }
 
     card.innerHTML = html;
     container.appendChild(card);
   }
+
+  // 디버그 내용 갱신
+  document.getElementById("debug-content").textContent = debugLog || "(데이터 없음)";
 }
 
-// ❌ 자동 갱신 제거
-// setInterval(render, 15000);
+function toggleDebug() {
+  const sec = document.getElementById("debug-section");
+  sec.style.display = sec.style.display === "none" ? "block" : "none";
+}
 </script>
 
 </body>
