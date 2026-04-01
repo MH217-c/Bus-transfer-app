@@ -4,255 +4,156 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>환승 버스 추천</title>
-
 <style>
-body {
-  font-family: -apple-system, BlinkMacSystemFont;
-  background: #f5f7fb;
-  margin: 0;
-  padding: 10px;
-}
+body { font-family: -apple-system, BlinkMacSystemFont; background: #f5f7fb; margin: 0; padding: 10px; }
 h1 { text-align: center; font-size: 22px; }
-
-.best-box {
-  background: #007aff;
-  color: white;
-  margin: 15px;
-  padding: 20px;
-  border-radius: 18px;
-  text-align: center;
-  font-size: 18px;
-}
-
-.refresh-btn {
-  display: block;
-  margin: 10px auto;
-  padding: 12px 20px;
-  border-radius: 12px;
-  border: none;
-  background: #007aff;
-  color: white;
-  font-size: 16px;
-  cursor: pointer;
-}
-
+.best-box { background: #007aff; color: white; margin: 15px; padding: 20px; border-radius: 18px; text-align: center; font-size: 18px; min-height: 60px; display: flex; align-items: center; justify-content: center; line-height: 1.5; }
+.refresh-btn { display: block; margin: 10px auto; padding: 12px 20px; border-radius: 12px; border: none; background: #007aff; color: white; font-size: 16px; cursor: pointer; min-width: 160px; }
+.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .container { display: grid; gap: 15px; }
-
-.card {
-  background: white;
-  padding: 20px;
-  border-radius: 18px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-}
-
-.card.best {
-  border: 3px solid #007aff;
-  transform: scale(1.02);
-}
-
-.stop-name { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
-.bus { font-size: 16px; margin: 5px 0; }
-.rank { font-weight: bold; color: #007aff; }
-
-/* 디버그 토글 */
-.debug-section {
-  margin-top: 30px;
-  background: #1e1e2e;
-  border-radius: 12px;
-  padding: 14px;
-  color: #cdd6f4;
-  font-family: monospace;
-  font-size: 12px;
-}
-.debug-toggle {
-  display: block;
-  margin: 20px auto 0;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  background: white;
-  font-size: 13px;
-  cursor: pointer;
-  color: #555;
-}
-.debug-content { display: none; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; margin-top: 10px; }
-.debug-content.open { display: block; }
+.card { background: white; padding: 20px; border-radius: 18px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+.card.best { border: 3px solid #007aff; transform: scale(1.02); }
+.stop-name { font-size: 17px; font-weight: bold; margin-bottom: 2px; }
+.stop-code { font-size: 12px; color: #999; margin-bottom: 10px; }
+.bus { font-size: 15px; margin: 6px 0; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.rank { font-weight: bold; color: #007aff; min-width: 28px; }
+.bus-num { font-weight: bold; font-size: 16px; min-width: 52px; }
+.bus-time { color: #333; }
+.bus-next { font-size: 12px; color: #aaa; }
+.no-bus { color: #bbb; font-size: 14px; }
+.debug-toggle { display: block; margin: 20px auto 0; padding: 8px 16px; border-radius: 8px; border: 1px solid #ddd; background: white; font-size: 12px; cursor: pointer; color: #888; }
+.debug-box { display: none; margin-top: 10px; background: #1e1e2e; border-radius: 12px; padding: 14px; color: #cdd6f4; font-family: monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto; }
 </style>
 </head>
-
 <body>
-
 <h1>🚍 환승 최적 추천</h1>
-
 <div id="bestBox" class="best-box">버튼 눌러서 조회</div>
-
-<button class="refresh-btn" onclick="render()">🔄 새로고침</button>
-
+<button class="refresh-btn" id="refreshBtn" onclick="render()">🔄 새로고침</button>
 <div class="container" id="container"></div>
-
-<button class="debug-toggle" onclick="toggleDebug()">🔍 원본 API 데이터 보기</button>
-<div class="debug-section" id="debug-section" style="display:none">
-  <div id="debug-content" class="debug-content open"></div>
-</div>
-
+<button class="debug-toggle" onclick="toggleDebug()">🔍 원본 데이터 보기</button>
+<div class="debug-box" id="debugBox"></div>
 <script>
 const STOPS = [
-  {name:"수원순복음교회·하늘채더퍼스트", id:"202000212", index:0},
-  {name:"수원남부버스공영차고지",          id:"202000216", index:1},
-  {name:"영통아이파크캐슬2단지",           id:"202000224", index:2},
-  {name:"영통롯데캐슬엘클래스1단지",       id:"202000223", index:3},
+  { name: "수원순복음교회·하늘채더퍼스트", displayCode: "02269", index: 0 },
+  { name: "수원남부버스공영차고지",          displayCode: "02363", index: 1 },
+  { name: "영통아이파크캐슬2단지",           displayCode: "04078", index: 2 },
+  { name: "영통롯데캐슬엘클래스1단지",       displayCode: "04440", index: 3 },
 ];
 
-// ✅ 핵심: 정확히 매칭할 노선 목록 (정규화된 형태로 보관)
 const FINAL_BUSES = ["13-1", "13", "64", "8", "701A", "H101", "13A", "76"];
 
-// ✅ 노선명 정규화 함수 — API가 어떤 형식으로 줘도 통일
-function normalizeName(raw) {
+function normalize(raw) {
   if (raw == null) return "";
-  return String(raw)
-    .trim()
-    .replace(/\s+/g, "")     // 공백 제거
-    .replace(/^0+/, "")       // 앞자리 0 제거 (013 → 13)
-    .replace(/번$/, "")       // 끝 "번" 제거
-    .toUpperCase();            // 대문자 통일 (h101 → H101)
+  return String(raw).trim().replace(/\s+/g,"").replace(/번$/,"").replace(/^0+(?=\d)/,"").toUpperCase();
 }
 
-// ✅ 정확히 일치하는지 확인 (includes 대신 Set으로 exact match)
-const FINAL_BUS_SET = new Set(FINAL_BUSES.map(normalizeName));
+// API 원본 → 표준 노선명
+// 디버그에서 누락 노선 발견 시 여기에 추가하세요
+const ALIAS = {
+  "131":"13-1", "13.1":"13-1", "13_1":"13-1", "13-1":"13-1",
+  "13A":"13A", "701A":"701A", "H101":"H101",
+};
 
-function isFinalBus(rawName) {
-  return FINAL_BUS_SET.has(normalizeName(rawName));
+const TARGET_SET = new Set(FINAL_BUSES.map(normalize));
+
+function resolveRoute(raw) {
+  const n = normalize(raw);
+  return ALIAS[n] ?? ALIAS[String(raw).trim().toUpperCase()] ?? n;
 }
 
-function getMyETA(index) {
-  return index * 120; // 정류장 간 2분 간격 추정
-}
+function extraRideMin(index) { return index * 2; }
 
-function estimateRideTime(route) {
-  const map = {
-    "13-1": 600, "13": 700, "64": 800, "8": 750,
-    "701A": 900, "H101": 850, "13A": 700, "76": 950
-  };
-  return map[normalizeName(route)] || 800;
+function rideToSchool(route) {
+  const map = {"13-1":10,"13":12,"64":13,"8":13,"701A":15,"H101":14,"13A":12,"76":16};
+  return map[normalize(route)] ?? 13;
 }
 
 let debugLog = "";
 
-async function getArrival(stopId) {
-  try {
-    const res = await fetch(`/api/bus?stationId=${stopId}`);
-    const data = await res.json();
+async function getArrival(displayCode) {
+  const res = await fetch(`/api/bus?displayCode=${displayCode}`);
+  const data = await res.json();
+  const sid = data._resolvedStationId ?? "??";
+  debugLog += `\n=== 정류소 ${displayCode} (stationId: ${sid}) ===\n`;
 
-    // 원본 데이터 디버그 로그에 저장
-    debugLog += `\n\n=== 정류소 ${stopId} ===\n`;
-    debugLog += JSON.stringify(data?.response?.msgBody?.busArrivalList, null, 2);
+  let items = data?.response?.msgBody?.busArrivalList;
+  if (!items) { debugLog += "  (도착 정보 없음)\n"; return []; }
+  if (!Array.isArray(items)) items = [items];
 
-    let items = data?.response?.msgBody?.busArrivalList;
-    if (!items) return [];
-
-    // 단일 객체면 배열로 변환
-    if (!Array.isArray(items)) items = [items];
-
-    let list = [];
-
-    for (let item of items) {
-      // ✅ API가 routeNm 또는 routeName 중 하나를 줄 수 있음
-      const rawName = item.routeNm ?? item.routeName ?? "";
-      const normalized = normalizeName(rawName);
-
-      // ✅ 정확히 일치하는 노선만 포함
-      if (!FINAL_BUS_SET.has(normalized)) continue;
-
-      const time1 = parseInt(item.predictTime1);
-      const time2 = parseInt(item.predictTime2);
-
-      if (!isNaN(time1)) {
-        list.push({
-          route: normalized,       // 정규화된 이름 사용
-          displayName: rawName,    // 원본도 보존
-          time: time1,
-          time2: isNaN(time2) ? null : time2,
-          locationNo: item.locationNo1,
-          flag: item.flag,
-        });
-      }
-    }
-
-    list.sort((a, b) => a.time - b.time);
-    return list.slice(0, 3);
-
-  } catch (e) {
-    debugLog += `\n\n=== 정류소 ${stopId} 오류 ===\n${e.message}`;
-    return [];
+  let list = [];
+  for (const item of items) {
+    const rawName  = item.routeNm ?? item.routeName ?? "";
+    const resolved = resolveRoute(rawName);
+    const matched  = TARGET_SET.has(resolved);
+    debugLog += `  ${matched?"✅":"  "} 원본="${rawName}" → "${resolved}"\n`;
+    if (!matched) continue;
+    const t1 = parseInt(item.predictTime1);
+    const t2 = parseInt(item.predictTime2);
+    if (isNaN(t1)) continue;
+    list.push({ route:resolved, rawName:rawName, time:t1, time2:isNaN(t2)?null:t2, flag:item.flag??"" });
   }
+  list.sort((a,b)=>a.time-b.time);
+  return list.slice(0,3);
 }
 
 async function render() {
   const container = document.getElementById("container");
-  const bestBox = document.getElementById("bestBox");
-
+  const bestBox   = document.getElementById("bestBox");
+  const btn       = document.getElementById("refreshBtn");
   container.innerHTML = "";
-  bestBox.innerText = "불러오는 중...";
+  bestBox.textContent = "불러오는 중...";
+  btn.disabled = true; btn.textContent = "⏳ 조회 중...";
   debugLog = "";
 
-  let bestStop = null;
-  let minTime = 999999;
-  let results = [];
+  const allArrivals = await Promise.all(STOPS.map(s=>getArrival(s.displayCode).catch(()=>[])));
 
-  for (let stop of STOPS) {
-    let arrivals = await getArrival(stop.id);
-    let myETA = getMyETA(stop.index);
-
-    results.push({ stop, arrivals, myETA });
-
-    for (let bus of arrivals) {
-      let waitSec = Math.max(bus.time * 60, myETA);
-      let total = waitSec + estimateRideTime(bus.route);
-
-      if (total < minTime) {
-        minTime = total;
-        bestStop = stop.name;
-      }
+  let bestStop=null, minTotal=Infinity;
+  const results = STOPS.map((stop,i)=>{
+    const arrivals=allArrivals[i];
+    for(const bus of arrivals){
+      const total=bus.time+extraRideMin(stop.index)+rideToSchool(bus.route);
+      if(total<minTotal){minTotal=total;bestStop=stop.name;}
     }
+    return {stop,arrivals};
+  });
+
+  if(bestStop){
+    bestBox.innerHTML=`👉 <strong>${bestStop}</strong>에서 내리기!<br><span style="font-size:14px;opacity:.85">망포고까지 약 ${minTotal}분 예상</span>`;
+  } else {
+    bestBox.textContent="해당 노선 정보 없음";
   }
 
-  bestBox.innerText = bestStop ? `👉 ${bestStop}에서 내리기!` : "정보 없음";
-
-  for (let data of results) {
-    let card = document.createElement("div");
-    card.className = "card";
-    if (data.stop.name === bestStop) card.classList.add("best");
-
-    let html = `<div class="stop-name">${data.stop.name}</div>`;
-
-    if (data.arrivals.length === 0) {
-      html += `<div class="bus" style="color:#999">해당 버스 없음</div>`;
+  for(const {stop,arrivals} of results){
+    const card=document.createElement("div");
+    card.className="card"+(stop.name===bestStop?" best":"");
+    let html=`<div class="stop-name">${stop.name}</div><div class="stop-code">${stop.displayCode}</div>`;
+    if(arrivals.length===0){
+      html+=`<div class="no-bus">해당 노선 없음</div>`;
     } else {
-      data.arrivals.forEach((bus, idx) => {
-        const nextInfo = bus.time2 != null ? ` <span style="color:#aaa;font-size:13px">(다음 ${bus.time2}분)</span>` : "";
-        const flagInfo = bus.flag === "STOP" ? " ⛔ 운행종료" : bus.flag === "WAIT" ? " ⏳ 대기중" : "";
-        html += `
-          <div class="bus">
-            <span class="rank">${idx + 1}위</span> —
-            <strong>${bus.route}번</strong>
-            ${bus.time}분 후${nextInfo}${flagInfo}
-          </div>`;
+      arrivals.forEach((bus,idx)=>{
+        const next=bus.time2!=null?`<span class="bus-next">(다음 ${bus.time2}분)</span>`:"";
+        const flag=bus.flag==="STOP"?" ⛔":bus.flag==="WAIT"?" ⏳":"";
+        const hint=normalize(bus.rawName)!==bus.route?`<span style="color:#bbb;font-size:11px"> [API:${bus.rawName}]</span>`:"";
+        html+=`<div class="bus">
+          <span class="rank">${idx+1}위</span>
+          <span class="bus-num">${bus.route}번${hint}</span>
+          <span class="bus-time">${bus.time}분 후</span>
+          ${next}${flag}
+        </div>`;
       });
     }
-
-    card.innerHTML = html;
+    card.innerHTML=html;
     container.appendChild(card);
   }
 
-  // 디버그 내용 갱신
-  document.getElementById("debug-content").textContent = debugLog || "(데이터 없음)";
+  document.getElementById("debugBox").textContent=debugLog;
+  btn.disabled=false; btn.textContent="🔄 새로고침";
 }
 
-function toggleDebug() {
-  const sec = document.getElementById("debug-section");
-  sec.style.display = sec.style.display === "none" ? "block" : "none";
+function toggleDebug(){
+  const b=document.getElementById("debugBox");
+  b.style.display=b.style.display==="block"?"none":"block";
 }
 </script>
-
 </body>
 </html>
