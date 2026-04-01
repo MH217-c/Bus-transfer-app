@@ -12,12 +12,7 @@ body {
   margin: 0;
   padding: 10px;
 }
-
-h1 {
-  text-align: center;
-  font-size: 22px;
-}
-
+h1 { text-align: center; font-size: 22px; }
 .best-box {
   background: #007aff;
   color: white;
@@ -27,39 +22,20 @@ h1 {
   text-align: center;
   font-size: 18px;
 }
-
-.container {
-  display: grid;
-  gap: 15px;
-}
-
+.container { display: grid; gap: 15px; }
 .card {
   background: white;
   padding: 20px;
   border-radius: 18px;
   box-shadow: 0 4px 15px rgba(0,0,0,0.08);
 }
-
 .card.best {
   border: 3px solid #007aff;
   transform: scale(1.02);
 }
-
-.stop-name {
-  font-size: 18px;
-  font-weight: bold;
-  margin-bottom: 10px;
-}
-
-.bus {
-  font-size: 16px;
-  margin: 5px 0;
-}
-
-.rank {
-  font-weight: bold;
-  color: #007aff;
-}
+.stop-name { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+.bus { font-size: 16px; margin: 5px 0; }
+.rank { font-weight: bold; color: #007aff; }
 </style>
 </head>
 
@@ -80,7 +56,7 @@ const STOPS = [
 const FINAL_BUSES = ["13-1","13","64","8","701A","H101","13A","76"];
 
 function getMyETA(index){
-  return index * 120; // 정류장 간 이동 시간 (초)
+  return index * 120;
 }
 
 function estimateRideTime(route){
@@ -94,23 +70,21 @@ function estimateRideTime(route){
 async function getArrival(stopId){
   try {
     const res = await fetch(`/api/bus?stationId=${stopId}`);
-    const text = await res.text();
+    const data = await res.json();
 
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(text, "text/xml");
-    const items = xml.getElementsByTagName("busArrivalList");
+    const items = data.response.msgBody.busArrivalList;
 
     let list = [];
 
     for (let item of items){
-      let route = item.getElementsByTagName("routeName")[0]?.textContent;
+      let route = String(item.routeName).trim(); // ⭐ 핵심 수정
+
       if (!FINAL_BUSES.includes(route)) continue;
 
-      let t1 = item.getElementsByTagName("predictTime1")[0];
-      if (t1){
+      if (item.predictTime1){
         list.push({
           route: route,
-          time: parseInt(t1.textContent)
+          time: parseInt(item.predictTime1)
         });
       }
     }
