@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>환승 버스 추천</title>
+
+<style>
+body {
+  font-family: -apple-system, BlinkMacSystemFont;
+  background: #f5f7fb;
+  margin: 0;
+  padding: 10px;
+}
+
+h1 {
+  text-align: center;
+  font-size: 22px;
+}
+
+.best-box {
+  background: #007aff;
+  color: white;
+  margin: 15px;
+  padding: 20px;
+  border-radius: 18px;
+  text-align: center;
+  font-size: 18px;
+}
+
+.container {
+  display: grid;
+  gap: 15px;
+}
+
+.card {
+  background: white;
+  padding: 20px;
+  border-radius: 18px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+}
+
+.card.best {
+  border: 3px solid #007aff;
+  transform: scale(1.02);
+}
+
+.stop-name {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.bus {
+  font-size: 16px;
+  margin: 5px 0;
+}
+
+.rank {
+  font-weight: bold;
+  color: #007aff;
+}
+</style>
+
+</head>
+
+<body>
+
+<h1>🚍 환승 최적 추천</h1>
+<div id="bestBox" class="best-box">불러오는 중...</div>
+<div class="container" id="container"></div>
+
+<script>
+const API_KEY = "f680f647b113d9fb620069ed709beb822253dd714fcd3c7ec7a73152dbfafed1";
+
+// ✅ 안정적인 CORS 프록시
+const PROXY = "https://corsproxy.io/?";
+
+const STOPS = [
+  {name:"곡반중학교", id:"202000215", index:0},
+  {name:"수원남부차고지", id:"202000216", index:1},
+  {name:"아이파크2단지", id:"202000224", index:2},
+  {name:"아이파크1단지", id:"202000223", index:3},
+];
+
+const FINAL_BUSES = ["13-1","13","64","8","701A","H101","13A","76"];
+
+function getMyETA(index){
+  return index * 120;
+}
+
+function estimateRideTime(route){
+  const map = {
+    "13-1":600,"13":700,"64":800,"8":750,
+    "701A":900,"H101":850,"13A":700,"76":950
+  };
+  return map[route] || 800;
+}
+
+async function getArrival(stopId){
+  try {
+    const url = `https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListv2?serviceKey=${API_KEY}&stationId=${stopId}`;
+
+    const res = await fetch(PROXY + encodeURIComponent(url));
+    const text = await res.text();
+
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(text, "text/xml");
+    const items = xml.getElementsByTagName("busArrivalList");
+
+    let list = [];
+
+    for (let item of items){
+      let route = item.getElementsByTagName("routeName")[0]?.textContent;
+      if (!FINAL_BUSES.includes(route)) continue;
+
+      let t1 = item.getElementsByTagName("predictTime1")[0];
+      if (t1){
+        list.push({
+          route: route,
+          time: parseInt(t1.textContent)
+        });
+      }
+    }
+
+    list.sort((a,b)=>a.time-b.time);
+    return list.slice(0,3);
+
+  } catch(e){
+    return [];
+  }
+}
+
+async function render(){
+  const container = document.getElementById("container");
+  container.innerHTML = "";
+
+  let bestStop = null;
+  let minTime = 999999;
+  let results = [];
+
+  for (let stop of STOPS){
+    let arrivals = await getArrival(stop.id);
+    let myETA = getMyETA(stop.index);
+
+    results.push({stop, arrivals, myETA});
+
+    for (let bus of arrivals){
+      let wait = (bus.time * 60) - myETA;
+      if (wait < 0) continue;
+
+      let total = myETA + wait + estimateRideTime(bus.route);
+
+      if (total < minTime){
+        minTime = total;
+        bestStop = stop.name;
+      }
+    }
+  }
+
+  document.getElementById("bestBox").innerText =
+    bestStop ? `👉 ${bestStop}에서 내리기!` : "정보 불러오기 실패";
+
+  for (let data of results){
+    let card = document.createElement("div");
+    card.className = "card";
+
+    if (data.stop.name === bestStop){
+      card.classList.add("best");
+    }
+
+    let html = `<div class="stop-name">${data.stop.name}</div>`;
+
+    if (data.arrivals.length === 0){
+      html += `<div class="bus">정보 없음</div>`;
+    } else {
+      data.arrivals.forEach((bus, idx)=>{
+        html += `
+          <div class="bus">
+            <span class="rank">${idx+1}번째</span> - 
+            ${bus.route}번 - 
+            ${bus.time}분 후
+          </div>
+        `;
+      });
+    }
+
+    card.innerHTML = html;
+    container.appendChild(card);
+  }
+}
+
+render();
+setInterval(render,15000);
+</script>
+
+</body>
+</html>
