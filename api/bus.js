@@ -1,4 +1,7 @@
 export default async function handler(req, res) {
+  // CORS 허용 (같은 도메인이지만 명시)
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
   const { stationId } = req.query;
   const API_KEY = "f680f647b113d9fb620069ed709beb822253dd714fcd3c7ec7a73152dbfafed1";
 
