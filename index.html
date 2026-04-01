@@ -103,7 +103,8 @@ async function getArrival(stopId){
     let list = [];
 
     for (let item of items){
-      let route = String(item.routeNm).trim();
+      let route = item.routeNm || item.routeName;
+      route = String(route).trim();
 
       // 🔥 노선명 정리
       route = route.replace("번", "").replace(/\s/g, "");
