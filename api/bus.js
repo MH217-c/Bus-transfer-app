@@ -1,11 +1,11 @@
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-
-  const { stationId, stationCode } = req.query;
+  const { stationId, routeId } = req.query;
   const API_KEY = "f680f647b113d9fb620069ed709beb822253dd714fcd3c7ec7a73152dbfafed1";
 
-  if (stationCode) {
-    const url = `http://apis.data.go.kr/6410000/busstationservice/v2/getBusStationListv2?serviceKey=${API_KEY}&stationName=${encodeURIComponent(stationCode)}&format=json`;
+  // 노선별 정류장 목록 조회
+  if (routeId) {
+    const url = `http://apis.data.go.kr/6410000/busrouteservice/v2/getBusRouteStationListv2?serviceKey=${API_KEY}&routeId=${routeId}&format=json`;
     try {
       const response = await fetch(url);
       const text = await response.text();
@@ -15,12 +15,12 @@ export default async function handler(req, res) {
       }
       return res.status(200).json(data);
     } catch(error) {
-      return res.status(500).json({ _error: "검색 실패", detail: error.message });
+      return res.status(500).json({ _error: "실패", detail: error.message });
     }
   }
 
   if (!stationId) {
-    return res.status(400).json({ _error: "stationId 또는 stationCode 파라미터 필요" });
+    return res.status(400).json({ _error: "파라미터 필요" });
   }
 
   const url = `http://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListv2?serviceKey=${API_KEY}&stationId=${stationId}&format=json`;
