@@ -8,8 +8,8 @@ export default async function handler(req, res) {
   if (findByCode) {
     try {
       // 수원시(41110) 전체 목록을 페이지별로 검색
-      for (let page = 1; page <= 16; page++) {
-        const url = `https://openapi.gg.go.kr/BusStation?KEY=${GG_KEY}&Type=json&pIndex=${page}&pSize=100&SIGUN_CD=41110`;
+      for (let page = 1; page <= 30; page++) {
+  const url = `https://openapi.gg.go.kr/BusStation?KEY=${GG_KEY}&Type=json&pIndex=${page}&pSize=100&SIGUN_CD=41590`;
         const response = await fetch(url);
         const data = await response.json();
         const rows = data?.BusStation?.[1]?.row ?? [];
